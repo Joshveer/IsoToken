@@ -71,3 +71,29 @@ def test_build_file_prompt_contains_all_parts():
     assert "src/foo.py" in result
     assert "x = 1" in result
     assert "```" in result
+
+
+def test_discover_files_finds_files_under_root():
+    from tools import discover_files
+    with tempfile.TemporaryDirectory() as d:
+        for name in ("a.py", "b.md", "c.txt"):
+            with open(os.path.join(d, name), "w") as f:
+                f.write("x")
+        paths = discover_files(root=d)
+        assert len(paths) == 3
+        assert any("a.py" in p for p in paths)
+        assert any("b.md" in p for p in paths)
+        assert any("c.txt" in p for p in paths)
+
+
+def test_discover_files_skips_excluded_dirs():
+    from tools import discover_files
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "top.py"), "w") as f:
+            f.write("x")
+        os.makedirs(os.path.join(d, ".git"))
+        with open(os.path.join(d, ".git", "config.py"), "w") as f:
+            f.write("x")
+        paths = discover_files(root=d)
+        assert len(paths) == 1
+        assert "top.py" in paths[0]

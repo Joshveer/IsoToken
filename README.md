@@ -48,7 +48,7 @@ For the local backend (transformers + PEFT):
 pip install -e ".[local]"
 ```
 
-This installs the `isotoken` command into your environment.
+This installs the `isotoken` command into your environment. You can run `isotoken` from **any directory** as long as that environment is active (e.g. `source .venv/bin/activate`). The tool does not depend on your current working directory. To use it from any terminal without activating the venv each time, add your venv’s `bin` to your PATH or add an alias in `~/.zshrc` (e.g. `alias isotoken='/path/to/IsoToken/.venv/bin/isotoken'`).
 
 ## Quick Start
 
@@ -209,8 +209,11 @@ Inside the REPL:
 # Simple prompt
 isotoken run "Compare Python and Rust for web backends"
 
-# With files (parallel refactoring)
+# With specific files
 isotoken run "Add type hints to all functions" --files src/utils.py src/main.py
+
+# All files under current directory (discovers and includes up to 200 files, skips .git, venv, etc.)
+isotoken run "Add docstrings" --all-files
 ```
 
 ### Distillation
@@ -243,7 +246,7 @@ Options:
   --distill-output  Dir for auto-distilled adapter
 
 Commands:
-  run       Run a prompt (one-shot)
+  run       Run a prompt (one-shot). Use --files for specific paths or --all-files to include all files under current directory.
   distill   Train a student LoRA from logs
 ```
 
@@ -265,6 +268,10 @@ Commands:
 source .venv/bin/activate
 pytest tests/ -v
 ```
+
+## Development
+
+Clone the repo, create a virtualenv, and install in editable mode with `pip install -e .` (or `pip install -e ".[local]"` for local backend). The project uses a `.gitignore` for `.venv`, `__pycache__`, `*.egg-info`, `.pytest_cache`, and `logs/`.
 
 ## Project Structure
 

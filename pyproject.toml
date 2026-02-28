@@ -8,6 +8,18 @@ version = "2.1.0"
 description = "Parallel LLM agent CLI with local model optimizations"
 readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "requests",
     "openai",
@@ -32,3 +44,7 @@ isotoken = "isotoken.__main__:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["isotoken"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

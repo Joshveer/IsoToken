@@ -6,6 +6,45 @@ import glob
 import os
 import re
 
+# Directories to skip when discovering "all files"
+DEFAULT_EXCLUDE_DIRS = frozenset({
+    ".git", ".venv", "venv", "__pycache__", "node_modules", ".tox",
+    "dist", "build", ".eggs", "site-packages", ".mypy_cache", ".ruff_cache",
+})
+# Extensions to include when discovering (None = all text-like files we can read)
+DEFAULT_DISCOVER_EXTENSIONS = (
+    ".py", ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".cfg", ".ini",
+    ".sh", ".bash", ".zsh", ".js", ".ts", ".jsx", ".tsx", ".html", ".css",
+    ".c", ".h", ".cpp", ".hpp", ".rs", ".go", ".rb", ".java", ".kt",
+)
+
+
+def discover_files(
+    root: str | None = None,
+    extensions: tuple[str, ...] | None = DEFAULT_DISCOVER_EXTENSIONS,
+    exclude_dirs: frozenset[str] | None = DEFAULT_EXCLUDE_DIRS,
+    max_files: int = 200,
+) -> list[str]:
+    """
+    Discover files under root (default: cwd). Returns list of paths.
+    Skips exclude_dirs, optionally filters by extension, caps at max_files.
+    """
+    root = os.path.abspath(root or os.getcwd())
+    if not os.path.isdir(root):
+        return []
+    out: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(root, topdown=True):
+        dirnames[:] = [d for d in dirnames if d not in (exclude_dirs or set())]
+        for name in filenames:
+            if len(out) >= max_files:
+                return out
+            if extensions and not any(name.endswith(ext) for ext in extensions):
+                continue
+            path = os.path.join(dirpath, name)
+            if os.path.isfile(path):
+                out.append(path)
+    return out
+
 
 def read_files(paths: list[str]) -> dict[str, str]:
     """

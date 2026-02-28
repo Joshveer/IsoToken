@@ -115,20 +115,43 @@ class LocalBackend:
         return self._generate(self._format_prompt(prompt))
 
     def _generate(self, prompt: str, max_new_tokens: int = 512) -> str:
+        import io
+        import logging
+        import os
+        import sys
+        import warnings
         import torch
+
         inputs = self._tokenizer(prompt, return_tensors="pt", truncation=True)
         input_ids = inputs["input_ids"].to(self._model.device)
         attention_mask = inputs.get("attention_mask")
         if attention_mask is not None:
             attention_mask = attention_mask.to(self._model.device)
-        with torch.no_grad():
-            output_ids = self._model.generate(
-                input_ids,
-                attention_mask=attention_mask,
-                max_new_tokens=max_new_tokens,
-                do_sample=False,
-                pad_token_id=self._tokenizer.eos_token_id,
-            )
+
+        old_stderr = sys.stderr
+        old_tf_verbosity = os.environ.get("TRANSFORMERS_VERBOSITY")
+        os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+        logging.getLogger("transformers").setLevel(logging.ERROR)
+        sys.stderr = io.StringIO()
+        try:
+            with torch.no_grad():
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    output_ids = self._model.generate(
+                        input_ids,
+                        attention_mask=attention_mask,
+                        max_new_tokens=max_new_tokens,
+                        do_sample=False,
+                        pad_token_id=self._tokenizer.eos_token_id,
+                    )
+        finally:
+            sys.stderr = old_stderr
+            if old_tf_verbosity is None:
+                os.environ.pop("TRANSFORMERS_VERBOSITY", None)
+            else:
+                os.environ["TRANSFORMERS_VERBOSITY"] = old_tf_verbosity
+            logging.getLogger("transformers").setLevel(logging.WARNING)
+
         new_tokens = output_ids[0][input_ids.shape[1]:]
         return self._tokenizer.decode(new_tokens, skip_special_tokens=True)
 

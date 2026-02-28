@@ -66,19 +66,43 @@ class IsoTokenEngine:
         else:
             self._run_node = result
 
+    _MAX_FULL_CONTENT_FILES = 10
+
     def run(
         self,
         prompt: str,
         files: list[str] | None = None,
+        edit: bool = False,
         strategy: str = "auto",
     ) -> dict[str, Any]:
         """
         Run full pipeline. Executes once in parallel; estimates sequential
         latency from node count to avoid running the prompt twice.
-        """
-        files_dict = read_files(files) if files else None
 
-        pep = fracture(prompt, files=files_dict)
+        files: list of file paths.
+        edit: if True, creates one node per file (parallel editing).
+              if False (default), includes file info as context in the prompt (single model call).
+              For <= _MAX_FULL_CONTENT_FILES files, includes full content.
+              For more files, includes only the file listing (paths) to keep the prompt small.
+        """
+        if files and not edit:
+            if len(files) <= self._MAX_FULL_CONTENT_FILES:
+                files_dict = read_files(files)
+                file_context = "\n\n".join(
+                    f"File: {path}\n```\n{content}\n```"
+                    for path, content in files_dict.items()
+                )
+            else:
+                file_context = "Files in workspace:\n" + "\n".join(
+                    f"- {f}" for f in sorted(files)
+                )
+            prompt = f"{prompt}\n\n{file_context}"
+            pep = fracture(prompt, files=None)
+        elif files and edit:
+            files_dict = read_files(files)
+            pep = fracture(prompt, files=files_dict)
+        else:
+            pep = fracture(prompt, files=None)
         validate_pep(pep)
         if strategy != "auto":
             pep["aggregation"] = {"strategy": strategy}

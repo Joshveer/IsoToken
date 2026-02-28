@@ -51,7 +51,7 @@ def test_engine_run_writes_files_with_mock_backend():
 
         with patch("engine.make_run_node", mock_make_run_node):
             engine = IsoTokenEngine(llm_backend={"backend": "openai", "api_key": "fake"})
-            result = engine.run("Refactor", files=[fpath])
+            result = engine.run("Refactor", files=[fpath], edit=True)
 
         assert fpath in result["files_changed"]
         with open(fpath) as f:

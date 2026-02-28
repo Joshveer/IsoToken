@@ -14,7 +14,14 @@ HELP_TEXT = """[bold]Commands:[/bold]
   /help            Show this message
   /backend <name>  Switch backend (openai, anthropic, ollama, local, ...)
   /model <id>      Switch model
+  /all-files       Load all files under current directory as context
+  /files <paths>   Load specific files as context (e.g. /files src/a.py src/b.py)
+  /no-files        Clear loaded files
+  /edit <task>     Edit loaded files in parallel (one model call per file)
   /exit            Quit
+
+[dim]When files are loaded, prompts can ask about them (single model call).
+Use /edit to actually modify files (one model call per file).[/dim]
 """
 
 
@@ -35,6 +42,8 @@ class InteractiveSession:
         self._distill_output = distill_output
         self._console = Console()
         self._engine = self._build_engine() if llm_backend else None
+        self._files: list[str] | None = None
+        self._all_files = False
 
     def _build_engine(self) -> IsoTokenEngine:
         return IsoTokenEngine(
@@ -94,6 +103,43 @@ class InteractiveSession:
                 self._console.print("[dim]Restart with env vars or --backend/--model to use a backend.[/dim]")
             self._console.print(f"Model set to: [cyan]{arg}[/cyan]")
             return True
+        if cmd == "/all-files":
+            from tools import discover_files
+            self._files = discover_files()
+            self._all_files = True
+            self._console.print(f"[green]Using all files[/green] under current directory ([cyan]{len(self._files)}[/cyan] file(s)).")
+            return True
+        if cmd == "/files":
+            if not arg:
+                self._console.print("[red]Usage:[/red] /files <path1> [path2] ...")
+                return True
+            self._files = arg.split()
+            self._all_files = False
+            self._console.print(f"[green]Using [cyan]{len(self._files)}[/cyan] file(s):[/green] {', '.join(self._files)}")
+            return True
+        if cmd == "/no-files":
+            self._files = None
+            self._all_files = False
+            self._console.print("[dim]Cleared loaded files.[/dim]")
+            return True
+        if cmd == "/edit":
+            if not arg:
+                self._console.print("[red]Usage:[/red] /edit <task>  (e.g. /edit Add docstrings to every function)")
+                return True
+            if not self._files:
+                self._console.print("[red]No files loaded.[/red] Use /all-files or /files first.")
+                return True
+            if self._engine is None:
+                self._console.print("[yellow]No backend configured.[/yellow]")
+                return True
+            self._console.print(f"[dim]Editing {len(self._files)} file(s)...[/dim]")
+            try:
+                with self._console.status("[bold]Editing...[/bold]", spinner="dots"):
+                    result = self._engine.run(arg, files=self._files, edit=True)
+                self._print_result(result)
+            except Exception as e:
+                self._console.print(f"[red]Error:[/red] {e}")
+            return True
 
         self._console.print(f"[red]Unknown command:[/red] {cmd}. Type /help for available commands.")
         return True
@@ -140,8 +186,9 @@ class InteractiveSession:
                 continue
 
             try:
+                files_to_use = self._files if self._files else None
                 with self._console.status("[bold]Thinking...[/bold]", spinner="dots"):
-                    result = self._engine.run(line)
+                    result = self._engine.run(line, files=files_to_use, edit=False)
                 self._print_result(result)
             except Exception as e:
                 self._console.print(f"[red]Error:[/red] {e}")

@@ -156,11 +156,11 @@ def _make_engine(llm_backend: dict):
     )
 
 
-def _execute_prompt(prompt: str, files: list[str] | None, llm_backend: dict):
+def _execute_prompt(prompt: str, files: list[str] | None, llm_backend: dict, edit: bool = True):
     from tools import read_files
     old_contents = read_files(files) if files else {}
     engine = _make_engine(llm_backend)
-    result = engine.run(prompt, files=files)
+    result = engine.run(prompt, files=files, edit=edit)
     _display_result(result, old_contents)
 
 
@@ -210,6 +210,7 @@ def main(
 def run(
     prompt: str = typer.Argument(..., help="Prompt to run"),
     files: Optional[list[str]] = typer.Option(None, "--files", "-f", help="Files to process"),
+    all_files: bool = typer.Option(False, "--all-files", "-a", help="Discover and include all files under current directory"),
 ):
     """Run a prompt through the IsoToken pipeline (one-shot)."""
     llm_backend = _resolve_backend(_backend_name, _model_name, _adapters_str)
@@ -217,6 +218,12 @@ def run(
         _print_banner()
         _print_no_backend_error(_backend_name)
         raise typer.Exit(1)
+
+    if all_files:
+        from tools import discover_files
+        files = discover_files()
+        if files:
+            console.print(f"[dim]Including {len(files)} file(s) from current directory.[/dim]\n")
 
     _print_banner()
     bname = llm_backend.get("backend", "?")
