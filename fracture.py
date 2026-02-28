@@ -1,23 +1,48 @@
 """
-Fracture Compiler. SPEC: Convert natural language task into JSON PEP.
-PEP schema: task_id, global_context, nodes (node_id, type, adapter, prompt, depends_on), aggregation.strategy.
+Fracture Compiler. Convert natural language task into JSON PEP.
+Supports text prompts (multi-question, compare, pros/cons, verify/critique)
+and file-aware prompts (one node per file for parallel code refactoring).
 """
 
 import re
 import uuid
 
-VALID_STRATEGIES = frozenset({"vote", "synthesize"})
+from tools import build_file_prompt
+
+VALID_STRATEGIES = frozenset({"vote", "synthesize", "confidence_vote"})
 
 
-def fracture(prompt: str) -> dict:
+def fracture(prompt: str, files: dict[str, str] | None = None) -> dict:
     """
-    Convert prompt to PEP (rule-based). SPEC: multi-question → parallel nodes; compare → parallel; verify/critique → sequential.
+    Convert prompt to PEP. When files is provided (path -> content), creates
+    one node per file for parallel processing. Otherwise uses rule-based
+    text decomposition.
     """
     prompt = (prompt or "").strip()
+
+    if files:
+        nodes = [
+            {
+                "node_id": f"n{i+1}",
+                "type": "file_edit",
+                "adapter": "default",
+                "prompt": build_file_prompt(path, content, prompt),
+                "depends_on": [],
+                "file_path": path,
+            }
+            for i, (path, content) in enumerate(files.items())
+        ]
+        return {
+            "task_id": str(uuid.uuid4()),
+            "global_context": "",
+            "nodes": nodes,
+            "aggregation": {"strategy": "vote"},
+        }
+
     if _is_multi_question(prompt):
         parts = _split_questions(prompt)
         nodes = [
-            {"node_id": f"n{i+1}", "type": "analysis", "adapter": "logic_lora", "prompt": p.strip(), "depends_on": []}
+            {"node_id": f"n{i+1}", "type": "analysis", "adapter": "default", "prompt": p.strip(), "depends_on": []}
             for i, p in enumerate(parts)
         ]
     elif _is_pros_cons(prompt):
@@ -25,13 +50,13 @@ def fracture(prompt: str) -> dict:
     elif _is_compare(prompt):
         parts = _split_compare(prompt)
         nodes = [
-            {"node_id": f"n{i+1}", "type": "analysis", "adapter": "logic_lora", "prompt": p.strip(), "depends_on": []}
+            {"node_id": f"n{i+1}", "type": "analysis", "adapter": "default", "prompt": p.strip(), "depends_on": []}
             for i, p in enumerate(parts)
         ]
     elif _is_verify_critique(prompt):
         nodes = _nodes_verify_critique(prompt)
     else:
-        nodes = [{"node_id": "n1", "type": "analysis", "adapter": "logic_lora", "prompt": prompt, "depends_on": []}]
+        nodes = [{"node_id": "n1", "type": "analysis", "adapter": "default", "prompt": prompt, "depends_on": []}]
     return {
         "task_id": str(uuid.uuid4()),
         "global_context": "",
@@ -85,8 +110,8 @@ def _is_pros_cons(prompt: str) -> bool:
 def _nodes_pros_cons(prompt: str) -> list[dict]:
     """Two independent threads: pros node, cons node."""
     return [
-        {"node_id": "n1", "type": "analysis", "adapter": "logic_lora", "prompt": f"List the pros of: {prompt}", "depends_on": []},
-        {"node_id": "n2", "type": "analysis", "adapter": "logic_lora", "prompt": f"List the cons of: {prompt}", "depends_on": []},
+        {"node_id": "n1", "type": "analysis", "adapter": "default", "prompt": f"List the pros of: {prompt}", "depends_on": []},
+        {"node_id": "n2", "type": "analysis", "adapter": "default", "prompt": f"List the cons of: {prompt}", "depends_on": []},
     ]
 
 
@@ -99,8 +124,8 @@ def _is_verify_critique(prompt: str) -> bool:
 def _nodes_verify_critique(prompt: str) -> list[dict]:
     """Sequential: analysis node then verification/critic node depending on it."""
     return [
-        {"node_id": "n1", "type": "analysis", "adapter": "logic_lora", "prompt": prompt, "depends_on": []},
-        {"node_id": "n2", "type": "verification", "adapter": "critic_lora", "prompt": f"Verify or critique the above: {prompt}", "depends_on": ["n1"]},
+        {"node_id": "n1", "type": "analysis", "adapter": "default", "prompt": prompt, "depends_on": []},
+        {"node_id": "n2", "type": "verification", "adapter": "default", "prompt": f"Verify or critique the above: {prompt}", "depends_on": ["n1"]},
     ]
 
 

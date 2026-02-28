@@ -1,6 +1,10 @@
-vllm
 requests
 pytest
-transformers
-peft
-accelerate
+openai
+anthropic
+ollama
+rich
+typer
+
+# Optional: local backend (--backend local)
+# pip install torch transformers peft accelerate datasets

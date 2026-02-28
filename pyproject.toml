@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "isotoken"
+version = "2.1.0"
+description = "Parallel LLM agent CLI with local model optimizations"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "requests",
+    "openai",
+    "anthropic",
+    "ollama",
+    "rich",
+    "typer",
+]
+
+[project.optional-dependencies]
+local = [
+    "torch",
+    "transformers",
+    "peft",
+    "accelerate",
+    "datasets",
+]
+
+[project.scripts]
+isotoken = "cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["isotoken"]

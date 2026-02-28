@@ -1,63 +1,46 @@
-# Plan (from SPEC.md)
+# IsoToken — Implementation Plan
 
-IsoToken: inference runtime that turns a single complex prompt into a parallel execution graph of LoRA-specialized reasoning threads on one base model and shared KV prefix. For decomposable tasks: reduce latency vs sequential chains, cut redundant KV prefill, preserve accuracy via parallel reasoning and voting, keep a single base-model footprint. **Phase 6:** Upgrade to true multi-adapter co-batching. **Phase 7:** Real prefix KV cache sharing. **Phase 8:** Rank-aware microbatch scheduler — group similar-cost nodes, avoid mixing high/low rank in same microbatch; execute_pep uses Scheduler per wave with AdapterRouter; fewer forward calls.
+Derived from SPEC.md.
 
----
+## Overview
 
-## Constraints (invariants)
+Dual-path CLI tool: API backends (OpenAI, Anthropic, Ollama, openai_compatible) for parallel calls + file agents, and a local backend (transformers + PEFT) that adds shared KV prefix, LoRA adapter switching, co-batching, and distillation.
 
-- **Stack only:** HuggingFace Transformers, vLLM (or TGI), PEFT (LoRA), Ray. No new transformer, scheduler kernel, LoRA math, or serving engine.
-- **Complexity:** Attention cost target O(C²) + Σ O(C_i²) vs sequential O((kC)²). Rank-aware scheduling: lower cost first (cost = adapter_rank × token_budget).
-- **Runtime:** Single base model (e.g. Meta-Llama-3-70B); multi-LoRA via PEFT with dynamic weight swapping or co-batched forward (AdapterRouter); parallelization via Ray or async batching.
-- **Phase 6 co-batching:** HuggingFace Transformers + PEFT only; no custom CUDA kernels; maintain execute_pep/run_node API; no global adapter state mutation inside forward.
+## Completed (v2 Phases A-H)
 
-## Non-Goals
+- Phase A: Cleanup (removed server, old PEFT/KV infrastructure)
+- Phase B: File tools (read_files, write_file, parse_code_block, build_file_prompt)
+- Phase C: API Backends (OpenAI, Anthropic, Ollama, openai_compatible)
+- Phase D: Executor (simplified, wave-based async)
+- Phase E: Fracture (file-aware PEP generation)
+- Phase F: Aggregator (file pass-through)
+- Phase G: Engine (API-only, file agents)
+- Phase H: CLI (rich output, --files, --backend)
 
-- New transformer, new scheduler kernel, new LoRA math, new serving engine.
+## Phase I — Local Backend
 
-## Edge-case invariants
+Create `local_backend.py`: `LocalBackend(model_id, adapters)` loads HuggingFace model + optional LoRA adapters via PEFT. Exposes: run_node (set adapter, generate text), prefill_shared_kv (one prefill, reuse past_key_values), decode_with_kv (decode with shared KV), forward_batch (co-batch prompts with different adapters). Add `"local"` case to `make_run_node` in backends.py. Imports are lazy; missing deps give a clear install message.
 
-- One adapter active per thread (legacy); or single forward graph for N heterogeneous adapters, no adapter leakage across batch elements (I.4).
-- Fixed prefix size; garbage collection after threads complete (KV fragmentation).
-- Parallelize only when expected gain exceeds scheduling overhead; if fewer than two tasks, run sequential.
+## Phase J — Executor Optimizations
 
----
+Re-add optional `prefill_fn` and `adapter_router` paths to execute.py, gated on availability. When local backend provides these, executor uses shared KV path and co-batching. API path unchanged.
 
-## Architecture
+## Phase K — Distillation
 
-Data flow: Client → Fracture Compiler → PEP (JSON) → Reasoning Kernel (LoRA runtime) → Shared KV Layer → Aggregator → Final Output.
+Create `distill.py`: `collect_data(log_path) -> Dataset` reads JSONL run logs; `train_student(model_id, log_path, output_dir, max_steps)` loads base + LoRA, SFT, saves adapter. Requires local backend deps.
 
-Build exactly: (1) graph compiler over prompts, (2) multi-LoRA shared-base runtime controller, (3) prefix KV reuse layer, (4) parallel reasoning execution engine, (5) consensus aggregation layer.
+## Phase L — Engine Dual-Path
 
----
+Update engine.py: detect local vs API backend. For local: wire prefill_fn and adapter_router to executor; add `distill()` method. For API: current behavior unchanged. Distillation logging always available.
 
-## Phases (implementation roadmap)
+## Phase M — CLI Updates
 
-| Phase | Milestone        | Objective |
-| ----- | ---------------- | --------- |
-| 1     | Base runtime     | Deploy Llama-3-70B with vLLM; attach LoRA via PEFT; validate hot-swapping adapters. |
-| 2     | PEP compiler     | Fracture: natural-language prompt → PEP JSON (rule-based). |
-| 3     | Parallel execution | Execute PEP: parallel node dispatch (Ray); shared KV prefix; adapter switching per thread. |
-| 4     | Aggregation      | Aggregate node outputs: vote and critic-synthesis strategies. |
-| 5     | KV optimization  | vLLM: expose KV blocks, clone prefix; measure prefill savings. |
-| 6     | Multi-adapter co-batching | AdapterRouter; execute_pep batches by wave → AdapterRouter.forward(); single forward for N adapters (I.4). |
-| 7     | Real prefix KV reuse     | execute_pep: prefill once (model(global_context_ids, use_cache=True)), capture past_key_values; each node decode with past_key_values=shared_kv; prefix_release_fn; FLOP counter. |
-| 8     | Rank-aware microbatch scheduler | Scheduler.schedule(nodes) → List[List[node]]; cost = adapter_rank × token_budget; group similar cost, isolate high rank; execute_pep per wave: batches = scheduler.schedule(wave); each batch → AdapterRouter.forward(). |
+Add `--backend local`, `--model`, `--adapters`, `distill` subcommand to CLI. Existing API flags unchanged.
 
----
+## Phase N — Dependencies
 
-## Success criteria (from Metrics)
+Add torch, transformers, peft, accelerate, datasets as optional deps in requirements.txt and pyproject.toml. API users don't need them.
 
-- **Context FLOPs:** Sequential O((kC)²) vs IsoToken O(C²) + Σ O(C_i²); measure GPU time.
-- **Latency:** Sequential 3-agent chain vs IsoToken parallel; target ≥ 1.5× improvement.
-- **Accuracy:** GSM8K, MMLU, BigBench Hard; parallel + vote vs single pass.
-- **Throughput (stretch):** ≥ 2× vs standard vLLM under heterogeneous adapter workloads.
-- **Distillation (Phase 2):** ≥ 85% of teacher-ensemble accuracy in one student forward pass.
+## Phase O — Tests
 
----
-
-## Open questions (from SPEC)
-
-- vLLM KV API for prefix clone (blocks vs references).
-- Phase 2 scope: distillation loop and trajectory pruning vs strict MVP.
-- Aggregation strategy selection per task type (vote vs critic synthesis).
+Add test_local_backend.py (tiny-gpt2: model load, LoRA attach, KV sharing, co-batch, adapter switching), test_distill.py (dataset from logs, 1-step training smoke), test_engine_local.py (engine with local backend, file agents, metrics). Run full suite; all existing tests unchanged.
