@@ -87,7 +87,7 @@ def _resolve_backend(backend: str, model: str | None, adapters: str | None) -> d
 
 
 def _print_banner():
-    console.print(Panel.fit("[bold]IsoToken v2.1[/bold] — Parallel Reasoning Engine", border_style="bright_blue"))
+    console.print(Panel.fit("[bold]IsoToken[/bold] — Parallel Reasoning Engine", border_style="bright_blue"))
 
 
 def _print_no_backend_error(backend: str):
@@ -216,7 +216,11 @@ def main(
     if llm_backend is None:
         _print_banner()
         _print_no_backend_error(backend)
-        raise typer.Exit(1)
+        # Still run interactive loop so user must Ctrl+C to exit
+        from interactive import InteractiveSession
+        session = InteractiveSession(None, distill_log=distill_log, auto_distill=auto_distill, distill_output=distill_output)
+        session.loop()
+        return
 
     from interactive import InteractiveSession
     session = InteractiveSession(llm_backend, distill_log=distill_log, auto_distill=auto_distill, distill_output=distill_output)

@@ -27,7 +27,7 @@ local = [
 ]
 
 [project.scripts]
-isotoken = "cli:app"
+isotoken = "isotoken.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

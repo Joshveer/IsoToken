@@ -1,3 +1,22 @@
+Metadata-Version: 2.4
+Name: isotoken
+Version: 2.1.0
+Summary: Parallel LLM agent CLI with local model optimizations
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: requests
+Requires-Dist: openai
+Requires-Dist: anthropic
+Requires-Dist: ollama
+Requires-Dist: rich
+Requires-Dist: typer
+Provides-Extra: local
+Requires-Dist: torch; extra == "local"
+Requires-Dist: transformers; extra == "local"
+Requires-Dist: peft; extra == "local"
+Requires-Dist: accelerate; extra == "local"
+Requires-Dist: datasets; extra == "local"
+
 # IsoToken
 
 Parallel reasoning engine. Fractures complex prompts into a DAG of LLM-powered agents that execute concurrently. Supports API backends (OpenAI, Anthropic, Ollama) and a local backend (transformers + PEFT) with shared KV prefix, LoRA adapter switching, co-batching, and distillation.

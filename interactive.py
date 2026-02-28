@@ -8,7 +8,7 @@ from rich.table import Table
 
 from engine import IsoTokenEngine
 
-BANNER = "[bold]IsoToken v2.1[/bold] — Parallel Reasoning Engine"
+BANNER = "[bold]IsoToken[/bold] — Parallel Reasoning Engine"
 
 HELP_TEXT = """[bold]Commands:[/bold]
   /help            Show this message
@@ -23,18 +23,18 @@ class InteractiveSession:
 
     def __init__(
         self,
-        llm_backend: dict,
+        llm_backend: dict | None,
         *,
         distill_log: str | None = None,
         auto_distill: int | None = None,
         distill_output: str = "student_adapter",
     ):
-        self._llm_backend = dict(llm_backend)
+        self._llm_backend = dict(llm_backend) if llm_backend else {}
         self._distill_log = distill_log
         self._auto_distill = auto_distill
         self._distill_output = distill_output
         self._console = Console()
-        self._engine = self._build_engine()
+        self._engine = self._build_engine() if llm_backend else None
 
     def _build_engine(self) -> IsoTokenEngine:
         return IsoTokenEngine(
@@ -46,10 +46,13 @@ class InteractiveSession:
 
     def _print_banner(self):
         self._console.print(Panel.fit(BANNER, border_style="bright_blue"))
-        bname = self._llm_backend.get("backend", "?")
-        mname = self._llm_backend.get("model") or self._llm_backend.get("model_id") or "default"
-        self._console.print(f"Backend: [cyan]{bname}[/cyan]  Model: [cyan]{mname}[/cyan]")
-        self._console.print(f'Type [bold]/help[/bold] for commands, [bold]/exit[/bold] to quit.\n')
+        if self._engine is None:
+            self._console.print("[yellow]No backend configured.[/yellow] Set env (e.g. OPENAI_API_KEY) or use [bold]--backend[/bold] and [bold]--model[/bold] when starting.")
+        else:
+            bname = self._llm_backend.get("backend", "?")
+            mname = self._llm_backend.get("model") or self._llm_backend.get("model_id") or "default"
+            self._console.print(f"Backend: [cyan]{bname}[/cyan]  Model: [cyan]{mname}[/cyan]")
+        self._console.print(f'Type [bold]/help[/bold] for commands. Type [bold]/exit[/bold] to quit.\n')
 
     def _handle_slash(self, line: str) -> bool:
         """Handle a slash command. Returns True if should continue loop, False to exit."""
@@ -67,8 +70,14 @@ class InteractiveSession:
                 self._console.print("[red]Usage:[/red] /backend <name>")
                 return True
             self._llm_backend["backend"] = arg
-            self._engine = self._build_engine()
-            self._console.print(f"Backend changed to: [cyan]{arg}[/cyan]")
+            if self._engine is not None:
+                try:
+                    self._engine = self._build_engine()
+                except Exception as e:
+                    self._console.print(f"[red]Could not switch backend:[/red] {e}")
+            else:
+                self._console.print("[dim]Restart with env vars or --backend/--model to use a backend.[/dim]")
+            self._console.print(f"Backend set to: [cyan]{arg}[/cyan]")
             return True
         if cmd == "/model":
             if not arg:
@@ -76,8 +85,14 @@ class InteractiveSession:
                 return True
             self._llm_backend["model"] = arg
             self._llm_backend["model_id"] = arg
-            self._engine = self._build_engine()
-            self._console.print(f"Model changed to: [cyan]{arg}[/cyan]")
+            if self._engine is not None:
+                try:
+                    self._engine = self._build_engine()
+                except Exception as e:
+                    self._console.print(f"[red]Could not switch model:[/red] {e}")
+            else:
+                self._console.print("[dim]Restart with env vars or --backend/--model to use a backend.[/dim]")
+            self._console.print(f"Model set to: [cyan]{arg}[/cyan]")
             return True
 
         self._console.print(f"[red]Unknown command:[/red] {cmd}. Type /help for available commands.")
@@ -105,17 +120,23 @@ class InteractiveSession:
         while True:
             try:
                 line = input("> ").strip()
-            except (KeyboardInterrupt, EOFError):
-                self._console.print("\n[dim]Goodbye.[/dim]")
-                break
+            except KeyboardInterrupt:
+                self._console.print("\n[dim]Type /exit to quit.[/dim]")
+                continue
+            except EOFError:
+                self._console.print("\n[dim]Type /exit to quit.[/dim]")
+                continue
 
             if not line:
                 continue
 
             if line.startswith("/"):
                 if not self._handle_slash(line):
-                    self._console.print("[dim]Goodbye.[/dim]")
                     break
+                continue
+
+            if self._engine is None:
+                self._console.print("[yellow]No backend configured.[/yellow] Set OPENAI_API_KEY or run with [bold]--backend local --model <id>[/bold]. Type /exit to quit.\n")
                 continue
 
             try:

@@ -1,0 +1,2 @@
+[console_scripts]
+isotoken = isotoken.__main__:main

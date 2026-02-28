@@ -1,0 +1,13 @@
+requests
+openai
+anthropic
+ollama
+rich
+typer
+
+[local]
+torch
+transformers
+peft
+accelerate
+datasets
