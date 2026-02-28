@@ -1,9 +1,8 @@
 """
-Tests for premium CLI: one-shot via `run`, --json, --quiet, --help, interactive session init.
+Tests for CLI: one-shot via `run`, --help, interactive session init.
 All tests use mock backends to avoid real API calls.
 """
 
-import json
 import os
 from unittest.mock import patch
 
@@ -24,25 +23,6 @@ def test_one_shot_returns_output():
         result = runner.invoke(app, ["--backend", "openai", "run", "Hello?"], env={"OPENAI_API_KEY": "sk-test"})
     assert result.exit_code == 0, result.output + (result.stderr or "")
     assert "Answer" in result.output or "mock answer" in result.output
-
-
-def test_json_flag_outputs_valid_json():
-    from cli import app
-    with patch("engine.make_run_node", _mock_make_run_node):
-        result = runner.invoke(app, ["--backend", "openai", "--json", "run", "Hello?"], env={"OPENAI_API_KEY": "sk-test"})
-    assert result.exit_code == 0, result.output + (result.stderr or "")
-    parsed = json.loads(result.output.strip())
-    assert "answer" in parsed
-    assert "metrics" in parsed
-
-
-def test_quiet_flag_prints_only_answer():
-    from cli import app
-    with patch("engine.make_run_node", _mock_make_run_node):
-        result = runner.invoke(app, ["--backend", "openai", "--quiet", "run", "Hello?"], env={"OPENAI_API_KEY": "sk-test"})
-    assert result.exit_code == 0, result.output + (result.stderr or "")
-    assert "Metrics" not in result.output
-    assert "Latency" not in result.output
 
 
 def test_no_backend_shows_error():

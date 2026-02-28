@@ -76,7 +76,7 @@ Parallel Executor (asyncio.gather)
   |-- API path: per-node LLM API call (OpenAI/Anthropic/Ollama)
   |-- Local path: shared KV + LoRA switching + co-batching
   v
-Aggregator (vote / synthesize / confidence_vote / file pass-through)
+Aggregator (vote / file pass-through)
   |
   v
 File Writer (apply changes) + CLI Output (rich)
@@ -110,7 +110,7 @@ Loads a HuggingFace model + optional LoRA adapters via PEFT. Exposes:
 
 ### 4. Parallel Executor (`execute.py`)
 
-Wave-based async execution. When local backend provides `prefill_fn` or `adapter_router`, the executor uses the optimized path (shared KV, co-batching). Otherwise falls back to parallel `asyncio.gather` (API backends).
+Wave-based async execution. When a local backend is provided, the executor uses the optimized path (shared KV, co-batching). Otherwise falls back to parallel `asyncio.gather` (API backends).
 
 ### 5. File Tools (`tools.py`)
 
@@ -118,7 +118,7 @@ Wave-based async execution. When local backend provides `prefill_fn` or `adapter
 
 ### 6. Aggregator (`aggregate.py`)
 
-vote, synthesize, confidence_vote, file pass-through.
+Majority vote (text tasks) or file pass-through (file tasks).
 
 ### 7. Engine (`engine.py`)
 

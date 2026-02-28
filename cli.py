@@ -1,17 +1,14 @@
 """
-IsoToken CLI. Typer-based with interactive mode, one-shot mode, JSON output, and Rich formatting.
+IsoToken CLI. Typer-based with interactive mode and one-shot mode.
 
 Usage:
   isotoken                              → interactive mode
-  isotoken "prompt"                     → one-shot mode (via default command)
   isotoken run "prompt" --files ...     → explicit run
   isotoken distill --log-path ...       → train student LoRA
 """
 
 import difflib
-import json
 import os
-import sys
 from typing import Optional
 
 import typer
@@ -34,9 +31,6 @@ console = Console()
 _backend_name: str = "auto"
 _model_name: str | None = None
 _adapters_str: str | None = None
-_json_mode: bool = False
-_quiet: bool = False
-_no_metrics: bool = False
 _debug: bool = False
 _distill_log: str | None = None
 _auto_distill: int | None = None
@@ -137,13 +131,7 @@ def _print_metrics(m: dict, files_changed_count: int = 0):
 
 
 def _display_result(result: dict, old_contents: dict[str, str]):
-    if _json_mode:
-        print(json.dumps(result, indent=2))
-        return
     files_changed = result.get("files_changed", [])
-    if _quiet:
-        print(result["answer"])
-        return
     if files_changed:
         console.print("[bold green]Changes applied:[/bold green]")
         for fpath in files_changed:
@@ -158,8 +146,7 @@ def _display_result(result: dict, old_contents: dict[str, str]):
     else:
         console.print(Panel(str(result["answer"]), title="[bold]Answer[/bold]", border_style="green"))
         console.print()
-    if not _no_metrics:
-        _print_metrics(result["metrics"], len(files_changed))
+    _print_metrics(result["metrics"], len(files_changed))
 
 
 def _make_engine(llm_backend: dict):
@@ -188,22 +175,16 @@ def main(
     backend: str = typer.Option("auto", "--backend", "-b", help="LLM backend"),
     model: Optional[str] = typer.Option(None, "--model", "-m", help="Model name/id"),
     adapters: Optional[str] = typer.Option(None, "--adapters", help="LoRA adapters (local only): name=path,name=path"),
-    json_flag: bool = typer.Option(False, "--json", help="Output pure JSON"),
-    quiet: bool = typer.Option(False, "--quiet", "-q", help="Print only the answer"),
-    no_metrics: bool = typer.Option(False, "--no-metrics", help="Suppress metrics table"),
     debug: bool = typer.Option(False, "--debug", help="Show full tracebacks"),
     distill_log: Optional[str] = typer.Option(None, "--distill-log", help="Log runs for distillation"),
     auto_distill: Optional[int] = typer.Option(None, "--auto-distill", help="Auto-distill every N runs"),
     distill_output: str = typer.Option("student_adapter", "--distill-output", help="Auto-distill output dir"),
 ):
-    global _backend_name, _model_name, _adapters_str, _json_mode, _quiet, _no_metrics, _debug
+    global _backend_name, _model_name, _adapters_str, _debug
     global _distill_log, _auto_distill, _distill_output
     _backend_name = backend
     _model_name = model
     _adapters_str = adapters
-    _json_mode = json_flag
-    _quiet = quiet
-    _no_metrics = no_metrics
     _debug = debug
     _distill_log = distill_log
     _auto_distill = auto_distill
@@ -216,7 +197,6 @@ def main(
     if llm_backend is None:
         _print_banner()
         _print_no_backend_error(backend)
-        # Still run interactive loop so user must Ctrl+C to exit
         from interactive import InteractiveSession
         session = InteractiveSession(None, distill_log=distill_log, auto_distill=auto_distill, distill_output=distill_output)
         session.loop()
@@ -237,16 +217,14 @@ def run(
     """Run a prompt through the IsoToken pipeline (one-shot)."""
     llm_backend = _resolve_backend(_backend_name, _model_name, _adapters_str)
     if llm_backend is None:
-        if not _quiet and not _json_mode:
-            _print_banner()
+        _print_banner()
         _print_no_backend_error(_backend_name)
         raise typer.Exit(1)
 
-    if not _quiet and not _json_mode:
-        _print_banner()
-        bname = llm_backend.get("backend", "?")
-        mname = llm_backend.get("model") or llm_backend.get("model_id") or "default"
-        console.print(f"Backend: [cyan]{bname}[/cyan]  Model: [cyan]{mname}[/cyan]\n")
+    _print_banner()
+    bname = llm_backend.get("backend", "?")
+    mname = llm_backend.get("model") or llm_backend.get("model_id") or "default"
+    console.print(f"Backend: [cyan]{bname}[/cyan]  Model: [cyan]{mname}[/cyan]\n")
 
     try:
         _execute_prompt(prompt, files, llm_backend)

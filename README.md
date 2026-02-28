@@ -20,7 +20,7 @@ isotoken "prompt" --files src/*.py --backend openai
 └────────┬────────┘
          ▼
 ┌─────────────────┐
-│   Aggregator    │  vote / synthesize / confidence_vote / file pass-through
+│   Aggregator    │  vote / file pass-through
 │  aggregate.py   │
 └────────┬────────┘
          ▼
@@ -173,15 +173,6 @@ isotoken run "Compare Python and Rust for web backends"
 
 # With files (parallel refactoring)
 isotoken run "Add type hints to all functions" --files src/utils.py src/main.py
-
-# JSON output (pipe-friendly)
-isotoken --json run "What is 2+2?"
-
-# Quiet (answer only)
-isotoken --quiet run "Hello"
-
-# No metrics
-isotoken --no-metrics run "Hello"
 ```
 
 ### Distillation
@@ -208,9 +199,6 @@ Options:
   --backend     openai|anthropic|ollama|openai_compatible|local|auto
   --model       Model name or HuggingFace id
   --adapters    LoRA adapters: name=path,name=path (local only)
-  --json        Output pure JSON
-  --quiet       Print only the answer
-  --no-metrics  Suppress metrics table
   --debug       Show full tracebacks
   --distill-log Log runs for distillation
   --auto-distill N  Auto-distill every N runs
@@ -260,8 +248,5 @@ IsoToken/
 │   └── __main__.py        # Entry point
 ├── tests/
 ├── pyproject.toml
-├── SPEC.md
-├── PLAN.md
-├── TASKS.md
-└── PROGRESS.md
+└── SPEC.md
 ```

@@ -9,7 +9,7 @@ import uuid
 
 from tools import build_file_prompt
 
-VALID_STRATEGIES = frozenset({"vote", "synthesize", "confidence_vote"})
+VALID_STRATEGIES = frozenset({"vote"})
 
 
 def fracture(prompt: str, files: dict[str, str] | None = None) -> dict:
@@ -132,7 +132,6 @@ def _nodes_verify_critique(prompt: str) -> list[dict]:
 def validate_pep(pep: dict) -> None:
     """
     Validate PEP JSON. Raises ValueError with clear message if invalid.
-    SPEC: task_id, global_context, nodes with node_id/type/adapter/prompt/depends_on, aggregation.strategy.
     """
     if not isinstance(pep, dict):
         raise ValueError("PEP must be a JSON object")
@@ -168,7 +167,7 @@ def is_pep_dag(pep: dict) -> bool:
     nodes = pep.get("nodes", [])
     node_ids = {n["node_id"] for n in nodes}
     adj: dict[str, list[str]] = {n["node_id"]: list(n.get("depends_on", [])) for n in nodes}
-    state: dict[str, int] = {}  # 0 = unvisited, 1 = visiting, 2 = done
+    state: dict[str, int] = {}
 
     def has_cycle(nid: str) -> bool:
         if state.get(nid) == 1:
