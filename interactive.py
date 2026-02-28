@@ -140,7 +140,8 @@ class InteractiveSession:
                 continue
 
             try:
-                result = self._engine.run(line)
+                with self._console.status("[bold]Thinking...[/bold]", spinner="dots"):
+                    result = self._engine.run(line)
                 self._print_result(result)
             except Exception as e:
                 self._console.print(f"[red]Error:[/red] {e}")

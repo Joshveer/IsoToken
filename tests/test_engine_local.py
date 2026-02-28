@@ -22,9 +22,9 @@ def test_engine_local_run_returns_answer():
     result = engine.run("Hello world")
     assert "answer" in result
     assert isinstance(result["answer"], str)
+    assert len(result["answer"].strip()) > 0, "Local backend should return full generation, not a single token"
     assert "metrics" in result
     assert result["metrics"]["backend"] == "local"
-    assert result["metrics"]["prefill_count"] == 1
 
 
 def test_engine_local_run_with_files():

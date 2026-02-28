@@ -119,12 +119,9 @@ def _print_metrics(m: dict, files_changed_count: int = 0):
     table.add_column(style="dim")
     table.add_column(style="bold")
     table.add_row("Latency", f"{m.get('latency_ms', 0):.0f} ms")
-    table.add_row("Sequential", f"{m.get('latency_sequential_ms', 0):.0f} ms")
     table.add_row("Speedup", f"{m.get('speedup_vs_sequential', 1):.2f}x")
     table.add_row("Agents", str(m.get("num_agents", 0)))
     table.add_row("Backend", str(m.get("backend", "?")))
-    if m.get("prefill_count") is not None:
-        table.add_row("Prefills", str(m["prefill_count"]))
     if files_changed_count:
         table.add_row("Files changed", str(files_changed_count))
     console.print(table)

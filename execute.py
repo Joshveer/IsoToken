@@ -27,11 +27,8 @@ async def execute_pep_async(pep: dict, run_node=None, parallel=True, metrics=Non
     """
     Execute all nodes of a PEP (async). Respects depends_on; independent nodes
     in the same wave run in parallel via asyncio.gather.
-
-    When local_backend is provided (LocalBackend instance), uses optimized paths:
-    - Shared KV prefix: prefill once, decode per node with shared past_key_values
-    - Co-batching: forward_batch for waves with multiple nodes
-    Otherwise uses the standard parallel asyncio.gather path (API backends).
+    All backends (API and local) use run_node; local run_node uses _generate()
+    for full multi-token responses.
     """
     if not is_pep_dag(pep):
         raise ValueError("PEP must be acyclic")
@@ -41,43 +38,8 @@ async def execute_pep_async(pep: dict, run_node=None, parallel=True, metrics=Non
         def run_node(n, ctx, shared_prefill=None):
             return None
 
-    if local_backend is not None and hasattr(local_backend, "prefill_shared_kv"):
-        global_context = pep.get("global_context") or ""
-        shared_kv = local_backend.prefill_shared_kv(global_context)
-        if metrics is not None:
-            metrics["prefill_count"] = 1
-        waves = _execution_waves(nodes)
-        results = {}
-        for wave in waves:
-            if len(wave) > 1 and hasattr(local_backend, "forward_batch"):
-                prompts = []
-                adapters = []
-                for nid in wave:
-                    node = node_by_id[nid]
-                    dep_outputs = {d: results[d] for d in node.get("depends_on", []) if d in results}
-                    prompt = node["prompt"]
-                    if dep_outputs:
-                        ctx_str = "\n".join(_result_to_context(dep_outputs[d]) for d in node.get("depends_on", []) if d in dep_outputs)
-                        prompt = f"{ctx_str}\n\n{prompt}"
-                    prompts.append(prompt)
-                    adapters.append(node.get("adapter", "default"))
-                batch_out = await asyncio.to_thread(local_backend.forward_batch, prompts, adapters)
-                for nid, raw in zip(wave, batch_out):
-                    results[nid] = raw
-            else:
-                for nid in wave:
-                    node = node_by_id[nid]
-                    dep_outputs = {d: results[d] for d in node.get("depends_on", []) if d in results}
-                    prompt = node["prompt"]
-                    if dep_outputs:
-                        ctx_str = "\n".join(_result_to_context(dep_outputs[d]) for d in node.get("depends_on", []) if d in dep_outputs)
-                        prompt = f"{ctx_str}\n\n{prompt}"
-                    if node.get("adapter", "default") != "default" and hasattr(local_backend, "set_adapter"):
-                        local_backend.set_adapter(node["adapter"])
-                    raw = local_backend.decode_with_kv(prompt, shared_kv)
-                    results[nid] = raw
-        return results
-
+    # Use run_node for all backends (API and local). Local run_node uses _generate()
+    # for full multi-token responses; decode_with_kv/forward_batch only yield one token.
     waves = _execution_waves(nodes)
     results = {}
     for wave in waves:

@@ -15,8 +15,6 @@ tests/test_distill.py
 tests/test_engine_local.py
 tests/test_file_agent.py
 tests/test_local_backend.py
-tests/test_task_10_1_confidence_vote.py
-tests/test_task_11_1_logging.py
 tests/test_task_2_1_pep_schema.py
 tests/test_task_2_2_multi_question.py
 tests/test_task_2_3_compare.py
@@ -26,9 +24,7 @@ tests/test_task_2_6_dag.py
 tests/test_task_2_7_sequential.py
 tests/test_task_3_1_execute_pep.py
 tests/test_task_3_2_parallel_dispatch.py
-tests/test_task_3_6_context_slicing.py
 tests/test_task_4_1_majority_vote.py
-tests/test_task_4_2_critic_synthesis.py
 tests/test_task_4_3_strategy_from_pep.py
 tests/test_task_9_1_async_parallelism.py
 tests/test_tools.py

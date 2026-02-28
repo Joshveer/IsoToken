@@ -1,6 +1,6 @@
 """
 Local model backend for IsoToken. Loads a HuggingFace model + optional LoRA
-adapters via PEFT. Provides shared KV prefix, adapter switching, co-batching.
+adapters via PEFT. Provides run_node, shared KV prefix, adapter switching, co-batching.
 """
 
 from collections import defaultdict
@@ -19,6 +19,24 @@ def _check_deps():
         ) from e
 
 
+def _best_device():
+    """Pick the best available device: MPS (Apple Silicon) > CUDA > CPU."""
+    import torch
+    if torch.backends.mps.is_available():
+        return "mps"
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+
+def _best_dtype(device: str):
+    """Pick dtype: float16 for GPU/MPS, float32 for CPU."""
+    import torch
+    if device in ("cuda", "mps"):
+        return torch.float16
+    return torch.float32
+
+
 class LocalBackend:
     """
     Load a HuggingFace model locally with optional LoRA adapters.
@@ -31,11 +49,26 @@ class LocalBackend:
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self._model_id = model_id
+        self._device = _best_device()
+        self._dtype = _best_dtype(self._device)
+
         self._tokenizer = AutoTokenizer.from_pretrained(model_id)
         if self._tokenizer.pad_token is None:
             self._tokenizer.pad_token = self._tokenizer.eos_token
 
-        self._model = AutoModelForCausalLM.from_pretrained(model_id)
+        self._model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            dtype=self._dtype,
+            low_cpu_mem_usage=True,
+        )
+        if self._device != "cpu":
+            self._model = self._model.to(self._device)
+
+        self._has_chat_template = (
+            hasattr(self._tokenizer, "chat_template")
+            and self._tokenizer.chat_template is not None
+        )
+
         self._adapter_names: list[str] = []
 
         if adapters:
@@ -59,6 +92,15 @@ class LocalBackend:
         if self._adapter_names:
             self._model.set_adapter(name)
 
+    def _format_prompt(self, text: str) -> str:
+        """Apply chat template for instruct models; pass through for base models."""
+        if self._has_chat_template:
+            messages = [{"role": "user", "content": text}]
+            return self._tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True,
+            )
+        return text
+
     def run_node(self, node: dict, context: dict, shared_prefill: Any = None) -> str:
         """Set adapter from node, generate text, return decoded string."""
         adapter = node.get("adapter", "default")
@@ -70,9 +112,9 @@ class LocalBackend:
             ctx_parts = [str(v) for v in context.values()]
             prompt = "\n\n".join(ctx_parts) + "\n\n" + prompt
 
-        return self._generate(prompt)
+        return self._generate(self._format_prompt(prompt))
 
-    def _generate(self, prompt: str, max_new_tokens: int = 256) -> str:
+    def _generate(self, prompt: str, max_new_tokens: int = 512) -> str:
         import torch
         inputs = self._tokenizer(prompt, return_tensors="pt", truncation=True)
         input_ids = inputs["input_ids"].to(self._model.device)

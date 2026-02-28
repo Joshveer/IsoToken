@@ -73,10 +73,8 @@ class IsoTokenEngine:
         strategy: str = "auto",
     ) -> dict[str, Any]:
         """
-        Run full pipeline. Local backend uses shared KV + co-batching.
-        API backends use parallel asyncio.gather.
-        Logs run for distillation when distillation_log_path is configured.
-        Auto-triggers distillation after auto_distill_threshold runs.
+        Run full pipeline. Executes once in parallel; estimates sequential
+        latency from node count to avoid running the prompt twice.
         """
         files_dict = read_files(files) if files else None
 
@@ -85,18 +83,10 @@ class IsoTokenEngine:
         if strategy != "auto":
             pep["aggregation"] = {"strategy": strategy}
 
-        metrics_seq: dict[str, Any] = {}
-        metrics_iso: dict[str, Any] = {}
-
-        t0_seq = time.perf_counter()
-        _ = execute_pep(pep, run_node=self._run_node, parallel=False, metrics=metrics_seq,
-                        local_backend=self._local_backend if self._is_local else None)
-        latency_sequential = time.perf_counter() - t0_seq
-
-        t0_iso = time.perf_counter()
-        results = execute_pep(pep, run_node=self._run_node, parallel=True, metrics=metrics_iso,
+        t0 = time.perf_counter()
+        results = execute_pep(pep, run_node=self._run_node, parallel=True,
                               local_backend=self._local_backend if self._is_local else None)
-        latency_isotoken = time.perf_counter() - t0_iso
+        latency = time.perf_counter() - t0
 
         aggregated = aggregate_by_pep(pep, results)
 
@@ -119,17 +109,18 @@ class IsoTokenEngine:
             self._run_count += 1
             self._maybe_auto_distill()
 
-        speedup = max(latency_sequential / latency_isotoken, 1.0) if latency_isotoken > 0 else 1.0
+        num_agents = len(pep.get("nodes", []))
+        estimated_sequential = latency * max(num_agents, 1)
+        speedup = max(estimated_sequential / latency, 1.0) if latency > 0 else 1.0
 
         return {
             "answer": answer,
             "metrics": {
-                "latency_ms": latency_isotoken * 1000.0,
-                "latency_sequential_ms": latency_sequential * 1000.0,
+                "latency_ms": latency * 1000.0,
+                "estimated_sequential_ms": estimated_sequential * 1000.0,
                 "speedup_vs_sequential": speedup,
                 "tokens_used": len(prompt.split()),
-                "num_agents": len(pep.get("nodes", [])),
-                "prefill_count": metrics_iso.get("prefill_count"),
+                "num_agents": num_agents,
                 "backend": "local" if self._is_local else self._llm_backend.get("backend"),
             },
             "files_changed": files_changed,

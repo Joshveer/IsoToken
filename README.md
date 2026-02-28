@@ -102,29 +102,66 @@ isotoken --backend ollama run "Your prompt"
 
 Ollama gives you parallel execution and file agents, but no shared KV or LoRA switching (it's an API, not weight-level access).
 
-### Local (HuggingFace model, full optimizations)
+### Local (HuggingFace model)
 
-Requires: `pip install -e ".[local]"`
+**1. Install local dependencies**
 
 ```bash
-# Any HuggingFace model
-isotoken --backend local --model meta-llama/Llama-3.1-8B run "Your prompt"
+pip install -e ".[local]"
+```
 
-# Smaller model for testing
-isotoken --backend local --model sshleifer/tiny-gpt2 run "Hello world"
+**2. Use the full Hugging Face model ID**
 
-# With LoRA adapters
+Model IDs must include the org prefix (e.g. `Qwen/Qwen2.5-7B-Instruct`, not `Qwen2.5-7B-Instruct`). Browse models at [huggingface.co/models](https://huggingface.co/models).
+
+**3. Gated models (e.g. Llama)**
+
+If the model is gated, request access on its Hugging Face page, then log in so the CLI can download it:
+
+```bash
+python -c "from huggingface_hub import login; login()"
+```
+
+Paste a token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens). (The `huggingface-cli` command may not be on your PATH; the Python one-liner works from the same venv.)
+
+**4. Set backend and model when you start**
+
+Backend and model are set on the command line, not inside the REPL. For interactive mode, start with your backend and model; then type prompts at `> `.
+
+```bash
+# Interactive: start with backend + model, then type prompts at ">"
+isotoken --backend local --model Qwen/Qwen2.5-7B-Instruct
+
+# One-shot
+isotoken --backend local --model Qwen/Qwen2.5-7B-Instruct run "Your prompt"
+```
+
+**5. First run and performance**
+
+- First run downloads the model (can take several minutes); it is cached under `~/.cache/huggingface/hub/`.
+- On Apple Silicon, the local backend uses MPS when available for faster inference. On CPU, a 7B model can take 30–60+ seconds per reply.
+- Instruct models (e.g. Qwen2.5-7B-**Instruct**) get chat formatting applied automatically.
+
+**Optional: shell alias**
+
+To avoid typing the long command every time, add to `~/.zshrc`:
+
+```bash
+alias isotoken-local='isotoken --backend local --model Qwen/Qwen2.5-7B-Instruct'
+```
+
+Then run `isotoken-local` for interactive or `isotoken-local run "Your prompt"` for one-shot.
+
+**With LoRA adapters**
+
+```bash
 isotoken --backend local \
   --model meta-llama/Llama-3.1-8B \
   --adapters logic=/path/to/logic_adapter,critic=/path/to/critic_adapter \
   run "Analyze and verify this code" --files src/main.py
 ```
 
-Local backend features (not available in API/Ollama):
-- Shared KV prefix: prefill once, decode per node
-- LoRA adapter switching: different adapters per node
-- Multi-adapter co-batching: one forward per adapter in a wave
-- Distillation: train a student LoRA to mimic swarm output
+Local backend features (not available with API/Ollama): LoRA adapter switching, multi-adapter co-batching, distillation training.
 
 ### OpenAI-Compatible (vLLM, LM Studio, etc.)
 
@@ -149,11 +186,12 @@ If you don't specify `--backend`, IsoToken checks env vars in order:
 ### Interactive mode
 
 ```bash
-# Launch REPL
+# Launch REPL (requires a configured backend)
 isotoken
 
-# With a specific backend
+# With a specific backend (set when starting, not inside the REPL)
 isotoken --backend openai
+isotoken --backend local --model Qwen/Qwen2.5-7B-Instruct
 ```
 
 Inside the REPL:
